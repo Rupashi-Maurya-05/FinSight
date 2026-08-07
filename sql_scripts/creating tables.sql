@@ -78,3 +78,17 @@ UPDATE transactions_data
 SET amount_clean = REPLACE(REPLACE(amount, '$', ''), ',', '')::NUMERIC;
 
 SELECT amount, amount_clean FROM transactions_data LIMIT 10;
+
+
+-- Create the fraud score table
+CREATE TABLE fraud_scores (
+    transaction_id BIGINT,
+    client_id INTEGER,
+    amount NUMERIC,
+    is_fraud TEXT,
+    rule_score NUMERIC,
+    iso_score NUMERIC,
+    xgb_score NUMERIC,
+    fraud_score NUMERIC,
+    risk_level TEXT
+);

@@ -23,20 +23,6 @@ LEFT JOIN transactions_data t ON u.id = t.client_id
 LEFT JOIN fraud_labels f ON t.id = f.transaction_id
 GROUP BY u.id, u.current_age, u.yearly_income, u.total_debt, u.credit_score;
 
--- hourly trend 
-CREATE OR REPLACE VIEW hourly_trends AS
-SELECT
-    EXTRACT(HOUR FROM transaction_date) AS hour,
-    EXTRACT(DOW FROM transaction_date) AS day_of_week,
-    COUNT(*) AS txn_count,
-    SUM(amount_clean) AS total_amount,
-    AVG(amount_clean) AS avg_amount,
-    -- separate labeled vs unlabeled
-    COUNT(f.transaction_id) AS labeled_count,
-    SUM(CASE WHEN f.is_fraud = 'Yes' THEN 1 ELSE 0 END) AS fraud_count
-FROM transactions_data t
-LEFT JOIN fraud_labels f ON t.id = f.transaction_id
-GROUP BY hour, day_of_week;
 
 -- marchant risk
 CREATE OR REPLACE VIEW merchant_risk AS
@@ -62,46 +48,6 @@ LEFT JOIN fraud_labels f ON t.id = f.transaction_id
 GROUP BY m.category
 ORDER BY fraud_rate_pct DESC;
 
--- fraud master
-CREATE OR REPLACE VIEW fraud_master AS
-SELECT
-    t.id AS transaction_id,
-    t.client_id,
-    t.card_id,
-    t.amount_clean AS amount,
-    t.use_chip,
-    t.merchant_id,
-    t.merchant_city,
-    t.merchant_state,
-    t.mcc,
-    m.category AS mcc_category,
-    t.errors,
-    t.transaction_date,
-    EXTRACT(HOUR FROM t.transaction_date) AS hour,
-    EXTRACT(DOW FROM t.transaction_date) AS day_of_week,
-    -- three-way label: Yes / No / Unlabeled
-    COALESCE(f.is_fraud, 'Unlabeled') AS is_fraud,
-    u.current_age,
-    u.yearly_income,
-    u.total_debt,
-    u.credit_score,
-    CASE WHEN u.total_debt > u.yearly_income THEN 'Yes' ELSE 'No' END AS debt_exceeds_income,
-    c.card_brand,
-    c.card_type,
-    c.has_chip,
-    c.card_on_dark_web
-FROM transactions_data t
-LEFT JOIN fraud_labels f ON t.id = f.transaction_id
-LEFT JOIN users_data u ON t.client_id = u.id
-LEFT JOIN cards_data c ON t.card_id = c.id
-LEFT JOIN mcc_codes m ON t.mcc = m.mcc;
-
--- verifying views
-SELECT * FROM customer_summary LIMIT 10;
-SELECT * FROM hourly_trends LIMIT 10;
-SELECT * FROM merchant_risk LIMIT 10;
-SELECT * FROM fraud_master LIMIT 10;
-
 -- Check what your actual column names are in transactions_data
 SELECT column_name, data_type 
 FROM information_schema.columns
@@ -121,9 +67,6 @@ SELECT date, transaction_date FROM transactions_data LIMIT 5;
 -- Confirm no NULLs remain
 SELECT COUNT(*) FROM transactions_data WHERE transaction_date IS NULL;
 
--- Then drop and recreate the two affected views
-DROP VIEW hourly_trends;
-DROP VIEW fraud_master;
 
 -- Recreate hourly_trends (same SQL as before, will now work correctly)
 CREATE VIEW hourly_trends AS
@@ -171,6 +114,12 @@ LEFT JOIN fraud_labels f ON t.id = f.transaction_id
 LEFT JOIN users_data u ON t.client_id = u.id
 LEFT JOIN cards_data c ON t.card_id = c.id
 LEFT JOIN mcc_codes m ON t.mcc = m.mcc;
+
+-- verifying views
+SELECT * FROM customer_summary LIMIT 10;
+SELECT * FROM hourly_trends LIMIT 10;
+SELECT * FROM merchant_risk LIMIT 10;
+SELECT * FROM fraud_master LIMIT 10;
 
 -- Verify both now show proper hours
 SELECT * FROM hourly_trends ORDER BY hour LIMIT 5;
